@@ -120,11 +120,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                     children: [
                       AnimatedCrossFade(
                         firstChild: _buildBackgroundImage(
-                          "assets/images/wallpaper_orange.png",
+                          "assets/images/wallpaper_sleepy.jpg",
                           imageHeight,
                         ),
                         secondChild: _buildBackgroundImage(
-                          "assets/images/wallpaper_white.png",
+                          "assets/images/wallpaper.jpg",
                           imageHeight,
                         ),
                         crossFadeState: _isToggle
