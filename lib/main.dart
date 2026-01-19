@@ -8,14 +8,14 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:block_blue_light/control_panel.dart';
 import 'package:block_blue_light/screen_size.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MobileAds.instance.initialize();
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+  await MobileAds.instance.initialize();
+  await Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
   Workmanager().registerPeriodicTask(
     "1",
     checkScheduleTask,
-    frequency: Duration(minutes: 15),
+    frequency: const Duration(minutes: 15),
   );
   runApp(const MyApp());
 }
@@ -38,12 +38,24 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   bool _isToggle = false;
+  late ImageProvider _sleepyImage;
+  late ImageProvider _defaultImage;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _updateToggleState();
+
+    _sleepyImage = const AssetImage("assets/images/wallpaper_sleepy.jpg");
+    _defaultImage = const AssetImage("assets/images/wallpaper.jpg");
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    precacheImage(_sleepyImage, context);
+    precacheImage(_defaultImage, context);
   }
 
   @override
@@ -61,6 +73,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future<void> _updateToggleState() async {
     final bool isActive = await FlutterOverlayWindow.isActive();
+    if (!mounted) return;
     setState(() {
       _isToggle = isActive;
     });
@@ -86,6 +99,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _handleToggle(bool value) async {
+    if (!mounted) return;
     setState(() {
       _isToggle = value;
     });
@@ -120,17 +134,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                     children: [
                       AnimatedCrossFade(
                         firstChild: _buildBackgroundImage(
-                          "assets/images/wallpaper_sleepy.jpg",
+                          _sleepyImage,
                           imageHeight,
                         ),
                         secondChild: _buildBackgroundImage(
-                          "assets/images/wallpaper.jpg",
+                          _defaultImage,
                           imageHeight,
                         ),
                         crossFadeState: _isToggle
                             ? CrossFadeState.showFirst
                             : CrossFadeState.showSecond,
-                        duration: Duration(milliseconds: 500),
+                        duration: const Duration(milliseconds: 500),
                       ),
                       Container(
                         constraints: BoxConstraints(
@@ -180,11 +194,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
 
-  Widget _buildBackgroundImage(String imagePath, double screenHeight) {
+  Widget _buildBackgroundImage(ImageProvider imageProvider, double screenHeight) {
     return Container(
       height: screenHeight,
       decoration: BoxDecoration(
-        image: DecorationImage(image: AssetImage(imagePath), fit: BoxFit.cover),
+        image: DecorationImage(image: imageProvider, fit: BoxFit.cover),
       ),
     );
   }
