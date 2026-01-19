@@ -1,4 +1,5 @@
 import 'package:block_blue_light/background_task.dart';
+import 'package:block_blue_light/notification_service.dart';
 import 'package:workmanager/workmanager.dart';
 import 'dart:async';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -10,6 +11,10 @@ import 'package:block_blue_light/screen_size.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  final NotificationService notificationService = NotificationService();
+  await notificationService.init();
+
   await MobileAds.instance.initialize();
   await Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
   Workmanager().registerPeriodicTask(
@@ -17,20 +22,22 @@ Future<void> main() async {
     checkScheduleTask,
     frequency: const Duration(minutes: 15),
   );
-  runApp(const MyApp());
+  runApp(MyApp(notificationService: notificationService));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final NotificationService notificationService;
+  const MyApp({super.key, required this.notificationService});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(home: const MyHomePage());
+    return MaterialApp(home: MyHomePage(notificationService: notificationService));
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
+  final NotificationService notificationService;
+  const MyHomePage({super.key, required this.notificationService});
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -40,6 +47,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   bool _isToggle = false;
   late ImageProvider _sleepyImage;
   late ImageProvider _defaultImage;
+  StreamSubscription? _notificationClickSubscription;
 
   @override
   void initState() {
@@ -49,6 +57,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     _sleepyImage = const AssetImage("assets/images/wallpaper_sleepy.jpg");
     _defaultImage = const AssetImage("assets/images/wallpaper.jpg");
+
+    _notificationClickSubscription =
+        widget.notificationService.onNotificationClick.stream.listen((actionId) {
+      debugPrint('[UI] Received notification action via stream: $actionId');
+      if (actionId == turnOffActionId) {
+        _handleToggle(false);
+      }
+    });
   }
 
   @override
@@ -61,11 +77,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _notificationClickSubscription?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _updateToggleState();
     }
@@ -77,6 +95,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     setState(() {
       _isToggle = isActive;
     });
+    if (!isActive) {
+      await widget.notificationService.cancelFilterNotification();
+    }
   }
 
 
@@ -88,12 +109,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _showOverlay() async {
-    // Prevent activating multiple times
-    if(await FlutterOverlayWindow.isActive()) return;
+    if (await FlutterOverlayWindow.isActive()) return;
 
     await FlutterOverlayWindow.showOverlay(
       alignment: OverlayAlignment.bottomCenter,
       flag: OverlayFlag.clickThrough,
+      visibility: NotificationVisibility.visibilityPrivate,
       positionGravity: PositionGravity.auto,
     );
   }
@@ -106,8 +127,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (value) {
       await _requestPermission();
       await _showOverlay();
+      await widget.notificationService.showFilterNotification();
     } else {
       await FlutterOverlayWindow.closeOverlay();
+      await widget.notificationService.cancelFilterNotification();
     }
   }
 
@@ -192,7 +215,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       ],
     );
   }
-
 
   Widget _buildBackgroundImage(ImageProvider imageProvider, double screenHeight) {
     return Container(

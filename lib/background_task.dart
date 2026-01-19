@@ -44,6 +44,7 @@ Future<void> checkSchedule() async {
       if (!await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.showOverlay(
           alignment: OverlayAlignment.bottomCenter,
+          visibility: NotificationVisibility.visibilitySecret,
           flag: OverlayFlag.clickThrough,
           positionGravity: PositionGravity.auto,
         );
