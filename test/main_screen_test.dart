@@ -1,4 +1,5 @@
 import 'package:block_blue_light/control_panel.dart';
+import 'package:block_blue_light/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:block_blue_light/main.dart';
@@ -6,7 +7,7 @@ import 'package:block_blue_light/main.dart';
 void main() {
   testWidgets('Test main screen UI and toggle switch', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(MyApp(notificationService: NotificationService(),));
 
     // Verify that the app bar title is correct.
     expect(find.text('블루 라이트 차단'), findsOneWidget);

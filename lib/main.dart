@@ -1,4 +1,5 @@
 import 'package:block_blue_light/background_task.dart';
+import 'package:block_blue_light/notification_service.dart';
 import 'package:workmanager/workmanager.dart';
 import 'dart:async';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -8,29 +9,35 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:block_blue_light/control_panel.dart';
 import 'package:block_blue_light/screen_size.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MobileAds.instance.initialize();
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+  
+  final NotificationService notificationService = NotificationService();
+  await notificationService.init();
+
+  await MobileAds.instance.initialize();
+  await Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
   Workmanager().registerPeriodicTask(
     "1",
     checkScheduleTask,
-    frequency: Duration(minutes: 15),
+    frequency: const Duration(minutes: 15),
   );
-  runApp(const MyApp());
+  runApp(MyApp(notificationService: notificationService));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final NotificationService notificationService;
+  const MyApp({super.key, required this.notificationService});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(home: const MyHomePage());
+    return MaterialApp(home: MyHomePage(notificationService: notificationService));
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
+  final NotificationService notificationService;
+  const MyHomePage({super.key, required this.notificationService});
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -38,22 +45,45 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   bool _isToggle = false;
+  late ImageProvider _sleepyImage;
+  late ImageProvider _defaultImage;
+  StreamSubscription? _notificationClickSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _updateToggleState();
+
+    _sleepyImage = const AssetImage("assets/images/wallpaper_sleepy.jpg");
+    _defaultImage = const AssetImage("assets/images/wallpaper.jpg");
+
+    _notificationClickSubscription =
+        widget.notificationService.onNotificationClick.stream.listen((actionId) {
+      debugPrint('[UI] Received notification action via stream: $actionId');
+      if (actionId == turnOffActionId) {
+        _handleToggle(false);
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    precacheImage(_sleepyImage, context);
+    precacheImage(_defaultImage, context);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _notificationClickSubscription?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _updateToggleState();
     }
@@ -61,9 +91,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future<void> _updateToggleState() async {
     final bool isActive = await FlutterOverlayWindow.isActive();
+    if (!mounted) return;
     setState(() {
       _isToggle = isActive;
     });
+    if (!isActive) {
+      await widget.notificationService.cancelFilterNotification();
+    }
   }
 
 
@@ -75,25 +109,28 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _showOverlay() async {
-    // Prevent activating multiple times
-    if(await FlutterOverlayWindow.isActive()) return;
+    if (await FlutterOverlayWindow.isActive()) return;
 
     await FlutterOverlayWindow.showOverlay(
       alignment: OverlayAlignment.bottomCenter,
       flag: OverlayFlag.clickThrough,
+      visibility: NotificationVisibility.visibilityPrivate,
       positionGravity: PositionGravity.auto,
     );
   }
 
   Future<void> _handleToggle(bool value) async {
+    if (!mounted) return;
     setState(() {
       _isToggle = value;
     });
     if (value) {
       await _requestPermission();
       await _showOverlay();
+      await widget.notificationService.showFilterNotification();
     } else {
       await FlutterOverlayWindow.closeOverlay();
+      await widget.notificationService.cancelFilterNotification();
     }
   }
 
@@ -120,17 +157,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                     children: [
                       AnimatedCrossFade(
                         firstChild: _buildBackgroundImage(
-                          "assets/images/wallpaper_orange.png",
+                          _sleepyImage,
                           imageHeight,
                         ),
                         secondChild: _buildBackgroundImage(
-                          "assets/images/wallpaper_white.png",
+                          _defaultImage,
                           imageHeight,
                         ),
                         crossFadeState: _isToggle
                             ? CrossFadeState.showFirst
                             : CrossFadeState.showSecond,
-                        duration: Duration(milliseconds: 500),
+                        duration: const Duration(milliseconds: 500),
                       ),
                       Container(
                         constraints: BoxConstraints(
@@ -179,12 +216,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     );
   }
 
-
-  Widget _buildBackgroundImage(String imagePath, double screenHeight) {
+  Widget _buildBackgroundImage(ImageProvider imageProvider, double screenHeight) {
     return Container(
       height: screenHeight,
       decoration: BoxDecoration(
-        image: DecorationImage(image: AssetImage(imagePath), fit: BoxFit.cover),
+        image: DecorationImage(image: imageProvider, fit: BoxFit.cover),
       ),
     );
   }
