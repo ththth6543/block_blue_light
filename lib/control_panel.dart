@@ -15,7 +15,7 @@ class ControlPanel extends StatefulWidget {
 class _ControlPanelState extends State<ControlPanel> {
   static const String _strengthKey = 'strength';
   static const String _brightnessKey = 'brightness';
-  static const String _adUnitId = "ca-app-pub-3940256099942544/6300978111"; // Test ID
+  static const String _adUnitId = "ca-app-pub-2402270916195349/6707041744";
 
   BannerAd? _bannerAd;
   ColorData _colorData = ColorData(strength: 120, brightness: 0);

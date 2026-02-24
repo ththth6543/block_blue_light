@@ -1,4 +1,4 @@
-package com.example.block_blue_light
+package com.blockbluelight.app
 
 import io.flutter.embedding.android.FlutterActivity
 
